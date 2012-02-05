@@ -249,6 +249,21 @@ Bitmap
     suspicion can be reduced or eliminated by compressing the images with
     PNG for long-term storage, which is a more common format which will
     preserve Polysteg's data. (DON'T USE JPEG!)
+    
+HOW IT WORKS
+Usable bits within each file are enumerated, then shuffled by encrypting the
+data not used by Polysteg with a key; the first key comes from the master
+password, the rest from the previous file in the chain. The first 640 bits
+are used to identify the next file in the chain and its scrambling key; they
+are encrypted with another key based on the master password.
+
+At the whole system level, all bits not in the first 640 are enumerated and
+shuffled using encryption on a stream of zero bytes and a key also derived from
+the master password. The data in the bits are then encrypted with another
+password-derived key.
+
+All encryption uses AES-CBC, except for the highest level of encryption
+(system-wide data encryption), which uses AES-ECB.
 
 PROGRAM USAGE REFERENCE
 Usage: ./polysteg.tcl options...
