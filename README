@@ -245,6 +245,10 @@ Bitmap
     using -bmprstride and -bmpcstride; the former makes Polysteg only use every
     <arg>th row; the latter makes it use only every <arg>th column within a
     row. It is recommended to use both of these in conjunction.
+  o Having uncompressed bitmaps is often in and of itself suspicious. This
+    suspicion can be reduced or eliminated by compressing the images with
+    PNG for long-term storage, which is a more common format which will
+    preserve Polysteg's data. (DON'T USE JPEG!)
 
 PROGRAM USAGE REFERENCE
 Usage: ./polysteg.tcl options...
