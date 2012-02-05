@@ -1,0 +1,28 @@
+Polysteg is a steganographic file system that uses multiple multimedia files
+for storage.
+
+Usage: ./polysteg.tcl options...
+-h, -help, --help    Display this help message and exit.
+-v, -verbose         Show extra messages.
+-debug               Show debugging messages.
+-d, -dir arg         Specify system root directory, defaults to .
+-r, -root arg        Indicate the first media file to use.
+-m, -mount arg       Specify mount directory.
+-nourandom           Use /dev/random instead of /dev/urandom.
+-format              Create a new system in the root directory.
+-password arg        Specify password on the command line.
+-noshuffledevbits    Don't shuffle bits within devices.
+-noshuffleallbits    Don't shuffle global bits.
+-o arg               Pass options to FUSE.
+-bmphd               Use more bits in Microsoft Device Independent Bitmap files.
+-bmpalpha            Modify alpha in Microsoft Bitmap files (generally a bad idea).
+-bmprstride arg      Only use every <arg>th row in Microsoft Bitmap files.
+-bmpcstride arg      Only use every <arg>th column in Microsoft Bitmap files.
+-mp3apadding         Enable modification of MP3 padding bytes (only relevent with -mp3audio).
+-mp3framestride arg  Only use every <arg>th MP3 frame (defaults to 1).
+-mp3checkcrcs        Verify CRCs of protected MP3 frames.
+-mp3audio            Enable modification of MP3 audio data (default if none specified).
+-mp3sideinfo         Enable modification of MP3 side information.
+-mp3bits             Enable modification of MP3 unused bits.
+-wavhd               Use more bits in Microloft Waveform Audio Files.
+-wavstride arg       Only use every <arg>th bit within Microsoft Waveform Audio Files.

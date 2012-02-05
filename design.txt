@@ -1,0 +1,206 @@
+Polysteg is a steganographic data storage utility posing as a FUSE "filesystem".
+It differs from other tools in a number of respects:
+o It does not attempt to be a filesystem itself; rather, it presents itself as
+  a block of storage, on top of which a real filesystem can be created.
+o It spreads its data across any number of different media files.
+
+Goals are as follows:
+o The system must be stable -- unlike StegFS, there is no possibility of
+  accidentally destroying data
+o The system must support full read-write random-access, to allow a conventional
+  filesystem to run on top of it.
+o The data should be fragile -- destroying a single file in the system should
+  destroy as much data as possible. In particular, removing the root file should
+  obliterate everything.
+
+The system is a stack of three layers:
+o The user layer: A FUSE filesystem containing a single file, /data, which
+  presents the entire payload of the Polysteg setup as a contiguous block of
+  data.
+o The logical layer: Ties together a number of storage devices into one logical
+  block, transparently handling encription/decription and data dispersion.
+o The physical layer: Stores and retrieves data from physical media files.
+
+The user layer is a relatively simple bridge between FUSE and the logical layer,
+and so is not documented further here.
+
+STORAGE DEVICE, COMMON
+Each storage device presents its data as a fixed array of indexed bits. It is
+also able to provide a stream of bytes which should be the out-of-band invariant
+data not used to store the Polysteg system.
+
+The bits within a storage device are reordered as follows:
+1. Pass the out-of-band invariant data through AES CBC encryption, using an
+   externally-supplied key.
+2. Place the indices into a list.
+3. For each bit index:
+   a. Read a 32-bit integer from the encrypted stream.
+   b. Modulo the integer by the current length of the index list.
+   c. Remember to redirect the logical bit for the current index to the physical
+      bit at the resulting index.
+   d. Remove that index from the list.
+
+The first 640 logical bits of a storage device are reserved to indicate the next
+storage device in the system (the interpretation is up to the logical layer).
+
+LOGICAL LAYER, ASSEMBLY
+To assemble the system, the logical layer is provided with the following base
+information:
+o The master password
+o The root directory of the system
+o The root file of the system, relative to the root directory
+o Any options needed by underlying storage engines
+
+The AES-CBC key for the first storage device's bit rearrangement is the lower
+128 bits of the SHA-256 hash of the master password.
+
+The initial list decryption key for AES-CBC of the link in the first storage
+device is the upper 128 bits of the SHA-256 hash of the master password.
+
+The key for AES-CBC for bit dispersal is seeded with the lower 128 bits of the
+SHA-256 of the master password concatenated with itself.
+
+The hash string for global encryption is seeded as the master password.
+
+Each time the logical layer opens a storage device:
+o The name of the device, relative to the system root, is appended to the global
+  encryption hash string.
+o The first 640 logical bits from the device are read into a byte array.
+o The byte array is decrypted with AES-CBC using the current link decryption
+  key (based on the master password for the first device, provided by the
+  previous device for all others).
+o The first 64 bytes specifies the name of the next file in the system (relative
+  to the system root); the last 16 comprise the AES-CBC decryption key for the
+  next link. If the name (which is a Nul-Terminated Byte-String) is non-empty,
+  the logical layer opens a storage device for that file.
+o Whether or not the next link was loaded, the decryption key is XORed with the
+  global dispersal key.
+
+The logical bits for all storage devices are collected into a list. Global
+dispersion is then run as follows:
+1. Pass a stream of zeros through AES-CBC encryption with the accumulated
+   global dispersion key.
+2. For each logical index:
+   a. Read a 32-bit integer from the stream, modulo the number of storage
+      device bits.
+   b. Map the current logical bit to that device bit.
+   c. Remove that device bit from the list.
+
+The key for AES-ECB, used for encrypting the final contents, is the lower 128
+bits of the SHA-256 hash of the accumulated global encryption hash string.
+
+LOGICAL LAYER, BLOCK DATA
+Block data is separated into 16-byte chunks, each of which is encrypted with
+AES-ECB.
+
+When reading, the blocks needed are determined, read from the appropriate
+logical bits of the storage devices, decrypted, and copied to the client.
+
+For writing, a list of modified blocks is determined. If any block is not
+entirely replaced, the current block is read and decrypted, the changes made.
+The data is then reencrypted and written back.
+
+STORAGE ENGINE: raw
+File extension: .steganograph
+Suspicion: high
+Casual detection: (not a media file)
+Formal detection: guaranteed
+Alters length: no
+Data density: 1:1 bits
+
+The raw storage engine directly addresses raw contents of a file. It is intended
+for testing purposes only.
+
+STORAGE ENGINE: mp3clobber
+File extension: .mp3 (default)
+Suspicion: low
+Casual detection: medium
+Formal detection: low
+Alters length: no
+Data density: 1 bit/frame
+
+The MP3-clobbering engine modifies one bit per data frame of an MP3 file, which
+distorts the sound somewhat, but does not invalidate the file and will often
+pass casual inspection. If the MP3 uses protected frames, some tools may point
+the engine will maintain the sums on writing.
+
+STORAGE ENGINE: mp3bits
+File extension: .mp3 (with mp3bits option)
+Suspicion: low
+Casual detection: none
+Formal detection: high
+Alters length: no
+Data density: 3--11 bits/frame (depending on file)
+
+The mp3bits engine modifies bits within the MP3 file that have no bearing on
+the rendering of the file, and which never invalidate it:
+o The "private" bit
+o The "copyrighted" bit
+o The "original" bit
+o The contents of any padding bytes
+These modifications are not performed on the first frame header. While casual
+observation will never catch the modifications, the inconsistent data will be a
+red flag to anyone searching for steganographic data.
+
+STORAGE ENGINE: mp3crc
+File extension: .mp3 (with mp3crc option)
+Suspicion: low
+Casual detection: low
+Formal detection: high
+Alters length: no
+Data density: 16 bits/frame (if the file uses protected frames)
+
+The mp3crc engine stores data within the CRCs of protected frames within the
+file. Most tools do not honour these checksums, though some may, hence the
+possibility of casual detection. Formal detection will notice the fact that the
+CRCs do not match what they are checking.
+
+STORAGE ENGINE: mp3bits+crc
+File extension: .mp3 (with mp3bits and mp3crc options)
+Suspicion: low
+Casual detection: low
+Formal detection: high
+Alters length: no
+Data density: 19--27 bits/frame
+
+This engine meerely combines the behaviours of the mp3bits and mp3crc engines.
+
+STORAGE ENGINE: wav
+File extension: .wav
+Suspicion: medium
+Casual detection: very low
+Formal detection: low
+Alters length: no
+Data density (minimum): 1:8 (8-bit) or 1:16 (16-bit) bits
+Data density (maximum): 1:4 bits
+
+The wav engine uses the least-significant bits of samples in Microsoft Wave
+files. The presense of these files is a bit suspicious, since most people use
+MP3s and Oggs nowadays.
+
+STORAGE ENGINE: bmp
+File extension: .bmp
+Suspicion: medium
+Casual detection: very low
+Formal detection: low
+Alters length: no
+Data density (minimum): 1:8 bits
+Data density (maximum): 1:4 bits
+
+The bmp engine uses the least-significant bits of pixels in Microsoft Bitmap
+files. The presense of these files is a bit suspicious, since most people use
+JPEGs and PNGs nowadays. (However, suspicion could be reduced by converting to
+PNG for transit, since those are common enough.)
+
+STORAGE ENGINE: space
+File extension: .txt
+Suspicion: low
+Casual detection: medium-low (medium if the nbsp option is used)
+Formal detection: high
+Alters length: no
+Data density: 1 bit/space character
+
+The space engine uses differentiation between normal space charachters versus
+nonbreaking and punctuation spaces (the latter two are treated the same) to
+encode data. By default, normal and punctuation spaces are used on writing; the
+nbsp option will cause it to use nonbreaking spaces instead.
