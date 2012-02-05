@@ -1,6 +1,252 @@
 Polysteg is a steganographic file system that uses multiple multimedia files
 for storage.
 
+Requirements:
+  Tcl 8.5 or later (http://tcl.tk/)
+  Itcl 3.4 or later
+  Tcl FUSE bindings (http://sourceforge.net/projects/tcl-fuse/)
+  Tcllib (http://tcllib.sourceforge.net/)
+  FUSE kernel interface
+
+INTRODUCTION
+Steganography is the art of concealing data such that discovery of its
+existence is made extremely difficult or impossible. Most digital
+steganographic systems take one of two forms:
+o hide one file in another (eg, steghide)
+o use a randomised area of raw disk (StegFS)
+The former has limited use, while the latter is error prone and suspicious
+in and of itself, since most people do not have large, "unused" portions
+of disk space outside of partitions (or rather, partitions with no file-
+system).
+
+Polysteg is different in that it allows hiding a proper filesystem in
+multiple multimedia files.
+
+In order to open a Polysteg system, the following must be provided:
+o the files the system is hidden within, with their original filenames
+o the name of the first file in the system
+o the master password of the system
+o any options that affect the order, distribution, or number of bits
+
+If any of these are lost, or any files modified close enough to the
+beginning or in such a way as to affect the system's bits, the entire system
+is irrecoverably lost. This is by design: Steganography is generally used in
+cases where discovery of data is worse than that data's destruction.
+
+CREATING a POLYSTEG SYSTEM
+First, you will need some multimedia files. See SUPPORTED FILE TYPES for a list
+of what Polysteg supports, and the data density you will get out of it. You
+will want to pick and name files such that the collection will not be
+suspicious; what exactly this means depends on the nature of the files and
+what would be considered "normal" for someone like you.
+
+You must also make sure that the originals of the files cannot be obtained; if
+they can be, a binary comparison will easily expose the presense of
+steganography.
+
+Place all the files under one directory (or subdirectories thereof), and choose
+one of them as the "root" file. Remember the name of the root file, relative to
+the root directory. For example, if the root directory is /the/path, and your
+root file is /the/path/to/file.mp3, then you provide the root file name as
+"to/file.mp3".
+
+It is highly recommended to place the Polysteg system on a physical filesystem
+that always writes file data back to the same location --- good examples are
+FAT16/FAT32. A horrible example is NilFS. If writes do not go back to the same
+disk location every time, forensics may be able to tell that the file has been
+written to many times, increasing suspicion.
+
+If this is a serious use of steganography, make sure you are not using a shell
+that saves your history; on Debian/Ubuntu, try "dash".
+
+Note that system size is severely limited by how much RAM you have available;
+the basic rule of thumb is that each 1GB of RAM will allow you to use 250kB
+of storage space (of course, on a 32-bit system, you are limited to effectively
+4GB of RAM for the Tcl process). You may want to tinker with the stride options
+to reduce data density as necessary.
+
+To initialise your polysteg system, run
+  ./polysteg.tcl -d <root-directory> -r <root-file> -format <other options>
+For example,
+  ./polysteg.tcl -d /the/path -r to/file.mp3 -format -mp3stride 13
+
+Make sure the password you enter is secure. If you make a mistake, copy the old
+files over the new system so that effective bit usage is not raised by a second
+initialisation.
+
+At this point, you may freely add more files to the collection --- they will be
+silently ignored by Polysteg. Adding files reduces detection probability, since
+fewer of the files will be modified.
+
+MOUNTING YOUR POLYSTEG SYSTEM
+To mount your Polysteg system, run the same command you used to initialise it,
+except with the -mount option instead of -format:
+  ./polysteg.tcl -d <root-directory> -r <root-file> -m <mount-point> <options>
+For example:
+  ./polysteg.tcl -d /the/path -r to/file.mp3 -mnt /mnt -mp3stride 13
+
+If successful, you will get a filesystem in the given mount point with a single
+file named "data". This file (which cannot be renamed, deleted, or resized)
+represents the whole of data available in the Polysteg system.
+
+The simplest way to use Polysteg is to tar up some files and write them:
+  tar -c top_secret | gzip -c9f | dd of=/mnt/data conv=notrunc
+dd with notrunc is necessary since most commands will try to truncate the file
+on opening, which is not a supported operation.
+
+You can get this data back as you would expect:
+  </mnt/data gunzip -f | tar -x
+
+A more sophisticated and sometimes more useful technique (which is what
+Polysteg was designed for) is to create and mount an actual filesystem within
+the Polysteg system.
+
+First, make sure you are running Polysteg as root. Then, as root, do the
+following (assuming Polysteg is mounted to /mnt) to create the filesystem:
+  mke2fs /mnt/data
+You will get a warning about not writing to a block device, which you may
+ignore.
+
+To mount the contained filesystem (assuming you want to mount to /secret):
+  mount /mnt/data /secret -t ext2 -o rw,loop
+
+This will give you a usable filesystem in /secret (or wherever you choose)
+which all programs can transparently use. Unmount with
+  umount /secret
+
+You can, of course, use any filesystem other than ext2 you see fit, if it
+fits within the rather small disk space. You won't want to use a journaling
+filesystem like ext3 though, as it will be horrifyingly slow and generally
+counter-productive.
+
+SUPPORTED FILE TYPES
+Polysteg supports a number of file types, based on extension. Each type is
+described by the following properties:
+  Type: The name of the file format
+  Extensions: Extensions (case-insensitive) that Polysteg recognises for this
+              type
+  Limitations: Type-specific format requirements; ie, what subset of files of
+               the type are actually supported
+  Density: How much data can be stored in the file, relative to total file size
+  Speed: Roughly how quickly data can be written (read speed is mostly
+         invariant across all types)
+  Casual detection: How likely is someone who encounters the file, but not
+                    actively looking for steganography, to notice that the file
+                    is not what it seems
+  Formal detection: How likely is someone or something looking for
+                    steganography to notice that the file is not what it seems
+  Deniability: Even under successful formal detection, how likely it is that
+               the file can be legally proven to be steganographic
+
+Raw File
+  Type: Flat data file
+  Extensions: .steganograph
+  Limitations: none
+  Density: 100%
+  Speed: high
+  Casual detection: guaranteed
+  Formal detection: guaranteed
+  Deniability: none
+  Notes:
+  o This type is intended for debugging and demonstrational purposes only.
+  o DO NOT USE IT IN SERIOUS SYSTEMS.
+
+Mp3
+  Type: MPEG Version 1 or 2 Layer III
+  Extensions: .mp3
+  Limitations:
+  o Unofficial Version 2.5 not supported
+  o Must be pure layer III file
+  Density: 0.1% to 0.5%
+  Speed: low
+  Casual detection:
+  o From -mp3audio and without -mp3apadding: medium (low density) to
+    high (high density)
+  o From -mp3audio and with -mp3apadding: low (low density with padding)
+    to high (high density with no padding)
+  o From -mp3bits: very low (only detectable with programs that do something
+    about the copyright bit)
+  o From -mp3sideinfo: low (low density) to very high (high density)
+  Formal detection:
+  o From -mp3audio and without -mp3apadding: Same as casual
+  o All others: high
+  Deniability:
+  o From -mp3audio and without -mp3apadding: Medium to high
+  o All others: low to none
+  Notes:
+  o The MP3 storage engine has three ways of storing data:
+    - Audio modification (-mp3audio, default if -mp3bits and -mp3sideinfo are
+      not specified); this distorts the sound somewhat, but it is hard to
+      impossible to prove that the file wasn't encoded that way. -mp3apadding
+      instructs it to allow modifying padding bytes instead of the bytes
+      immediately therebefore; while this reduces or eliminates sound
+      distortion, the inconsistent padding bytes raise suspicion in formal
+      contexts.
+    - Modification of unused bits (private, copyright, and original). Most
+      programs ignore these bits, so in almost all circumstances, casual
+      observation will not detect this. However, the inconsistent bits
+      which are normally the same across the whole file are quite suspicious.
+    - Modification of side data. In some cases, this is casually (and formally)
+      undetectable; however, with higher densities, it is even more noticable
+      than -mp3audio. It should only be used with high values of
+      -mp3framestride.
+  o The -mp3checkcrcs option will cause Polysteg to check whether the stored
+    CRCs match its internal algorithm. This is a debugging option.
+  o The -mp3framestride takes one argument, and causes Polysteg to only use
+    every <arg>th frame. This evenly reduces the data density in the file,
+    reducing casual detectability of audio and/or side information
+    modification.
+
+Wave
+  Type: Microsoft RIFF Waveform Format
+  Extensions: .wav
+  Limitations:
+  o Only supports uncompressed formats
+  o Only supports the single-DATA format
+  o Does not support k-bit files, where k = 2^(3*i)+1 (i is an integer), if
+    -wavehd is used
+  o Does not support 4-bit or lower files
+  Density: Commonly 1/16 to 1/4
+  Speed: medium to high
+  Casual detection: low to very low
+  Formal detection: low
+  Deniability: very high
+  Notes:
+  o Having .wav files in a collection is suspicious for most people. However,
+    compressing them with FLAC for long-term storage mostly eliminates this
+    suspicion while preserving the data.
+  o The -wavhd causes Polysteg to use two bits per sample point instead of one;
+    it doubles the data density, in exchange for slightly increasing sound
+    distortion.
+  o The -wavstride takes one argument and causes Polysteg to only use every
+    <arg>th bit. This reduces data density and evenly reduces sound distortion.
+
+Bitmap
+  Type: Microsoft Device-Independent-Bitmap
+  Extensions: .bmp, .dib
+  Limitations:
+  o Only supports 16-, 24-, and 32-bit formats
+  o Only supports uncompressed bitmaps
+  o Only supports Windows 3.1 bitmaps and later; OS/2 formats not supported
+  Density: 3/32 to 6/16
+  Speed: medium to high
+  Casual detection: low
+  Formal detection: low; possibly high with -bmpalpha
+  Deniability: very high; medium to low with -bmpalpha in most cases
+  Notes:
+  o The bitmap engine modifies the least significant bit(s) of colour
+    components of pixels.
+  o Normally, one bit per colour component is used; if -bmphd is specified,
+    it uses two instead.
+  o Colours that have fewer bits than twice the bit density are ignored.
+  o By default, the alpha channel is not modified, as it is non-noisy in
+    the vast majority of images; this can be changed by using -bmpalpha.
+  o Data density (and therefore colour distortion, evenly) can be reduced by
+    using -bmprstride and -bmpcstride; the former makes Polysteg only use every
+    <arg>th row; the latter makes it use only every <arg>th column within a
+    row. It is recommended to use both of these in conjunction.
+
+PROGRAM USAGE REFERENCE
 Usage: ./polysteg.tcl options...
 -h, -help, --help    Display this help message and exit.
 -v, -verbose         Show extra messages.
