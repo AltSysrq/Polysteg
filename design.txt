@@ -121,8 +121,7 @@ Data density: 1 bit/frame
 
 The MP3-clobbering engine modifies one bit per data frame of an MP3 file, which
 distorts the sound somewhat, but does not invalidate the file and will often
-pass casual inspection. If the MP3 uses protected frames, some tools may point
-the engine will maintain the sums on writing.
+pass casual inspection.
 
 STORAGE ENGINE: mp3bits
 File extension: .mp3 (with mp3bits option)
@@ -130,40 +129,27 @@ Suspicion: low
 Casual detection: none
 Formal detection: high
 Alters length: no
-Data density: 3--11 bits/frame (depending on file)
+Data density: 3 bits/frame
 
 The mp3bits engine modifies bits within the MP3 file that have no bearing on
 the rendering of the file, and which never invalidate it:
 o The "private" bit
 o The "copyrighted" bit
 o The "original" bit
-o The contents of any padding bytes
 These modifications are not performed on the first frame header. While casual
 observation will never catch the modifications, the inconsistent data will be a
 red flag to anyone searching for steganographic data.
 
-STORAGE ENGINE: mp3crc
-File extension: .mp3 (with mp3crc option)
+STORAGE ENGINE: mp3sideinfo
+File extension: .mp3 (with mp3sideinfo option)
 Suspicion: low
-Casual detection: low
-Formal detection: high
-Alters length: no
-Data density: 16 bits/frame (if the file uses protected frames)
+Casual detection: medium
+Formal detection: low
+Data density: 1 bit/frame
 
-The mp3crc engine stores data within the CRCs of protected frames within the
-file. Most tools do not honour these checksums, though some may, hence the
-possibility of casual detection. Formal detection will notice the fact that the
-CRCs do not match what they are checking.
-
-STORAGE ENGINE: mp3bits+crc
-File extension: .mp3 (with mp3bits and mp3crc options)
-Suspicion: low
-Casual detection: low
-Formal detection: high
-Alters length: no
-Data density: 19--27 bits/frame
-
-This engine meerely combines the behaviours of the mp3bits and mp3crc engines.
+Like mp3clobber, but modifies a bit within the side info of each MP3
+frame. Experimentation indicates that this results in less audible distortion
+at lower data densities than mp3clobber, but far worse at higher densities.
 
 STORAGE ENGINE: wav
 File extension: .wav
@@ -183,7 +169,6 @@ File extension: .bmp
 Suspicion: medium
 Casual detection: very low
 Formal detection: low
-Alters length: no
 Data density (minimum): 1:8 bits
 Data density (maximum): 1:4 bits
 
@@ -191,16 +176,3 @@ The bmp engine uses the least-significant bits of pixels in Microsoft Bitmap
 files. The presense of these files is a bit suspicious, since most people use
 JPEGs and PNGs nowadays. (However, suspicion could be reduced by converting to
 PNG for transit, since those are common enough.)
-
-STORAGE ENGINE: space
-File extension: .txt
-Suspicion: low
-Casual detection: medium-low (medium if the nbsp option is used)
-Formal detection: high
-Alters length: no
-Data density: 1 bit/space character
-
-The space engine uses differentiation between normal space charachters versus
-nonbreaking and punctuation spaces (the latter two are treated the same) to
-encode data. By default, normal and punctuation spaces are used on writing; the
-nbsp option will cause it to use nonbreaking spaces instead.
