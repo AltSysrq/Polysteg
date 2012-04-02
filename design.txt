@@ -105,7 +105,6 @@ File extension: .steganograph
 Suspicion: high
 Casual detection: (not a media file)
 Formal detection: guaranteed
-Alters length: no
 Data density: 1:1 bits
 
 The raw storage engine directly addresses raw contents of a file. It is intended
@@ -116,7 +115,6 @@ File extension: .mp3 (default)
 Suspicion: low
 Casual detection: medium
 Formal detection: low
-Alters length: no
 Data density: 1 bit/frame
 
 The MP3-clobbering engine modifies one bit per data frame of an MP3 file, which
@@ -128,7 +126,6 @@ File extension: .mp3 (with mp3bits option)
 Suspicion: low
 Casual detection: none
 Formal detection: high
-Alters length: no
 Data density: 3 bits/frame
 
 The mp3bits engine modifies bits within the MP3 file that have no bearing on
@@ -156,7 +153,6 @@ File extension: .wav
 Suspicion: medium
 Casual detection: very low
 Formal detection: low
-Alters length: no
 Data density (minimum): 1:8 (8-bit) or 1:16 (16-bit) bits
 Data density (maximum): 1:4 bits
 
